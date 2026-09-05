@@ -1,0 +1,1 @@
+function _e(e,t,n){let r=e.target.files?.[0];if(!r||!r.type.startsWith(`image/`))return;let i=new FileReader;i.onload=e=>{let r=e.target?.result;t(r),n(r)},i.readAsDataURL(r)}

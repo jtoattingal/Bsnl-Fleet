@@ -1,0 +1,6 @@
+{
+  "name": "Vehicle Digital Logbook",
+  "description": "BSNL Vehicle Digital Logbook application built with the MERN stack for official trip recording, meter reading calculations, station allowances, and monthly report generation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
