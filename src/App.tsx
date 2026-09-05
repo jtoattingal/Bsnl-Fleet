@@ -30,12 +30,20 @@ export function App() {
   const [currentView, setCurrentView] = useState<AppView>('login');
   const [entries, setEntries] = useState<LogEntry[]>(DEFAULT_ENTRIES);
   const [users, setUsers] = useState<User[]>(DEFAULT_USERS);
-  const [settings, setSettings] = useState<AppSettings>({
-    vehicleRegistration: DEFAULT_VEHICLE_REGISTRATION,
-    monthlyAllowance: DEFAULT_MONTHLY_ALLOWANCE,
-    logoUrl: '',
-    vehicleImg: DEFAULT_VEHICLE_IMG,
-    adminPassword: 'Bsnlatt',
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    try {
+      const cached = localStorage.getItem('bsnl_cached_settings');
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch {}
+    return {
+      vehicleRegistration: DEFAULT_VEHICLE_REGISTRATION,
+      monthlyAllowance: DEFAULT_MONTHLY_ALLOWANCE,
+      logoUrl: '',
+      vehicleImg: DEFAULT_VEHICLE_IMG,
+      adminPassword: 'Bsnlatt',
+    };
   });
   const [editingEntry, setEditingEntry] = useState<LogEntry | undefined>(undefined);
   const [loadingInitial, setLoadingInitial] = useState(true);
@@ -46,12 +54,17 @@ export function App() {
     async function loadData() {
       try {
         const [loadedSettings, loadedEntries, loadedUsers] = await Promise.all([
-          api.getSettings().catch(() => settings),
+          api.getSettings().catch(() => null),
           api.getEntries().catch(() => DEFAULT_ENTRIES),
           api.getUsers().catch(() => DEFAULT_USERS),
         ]);
 
-        if (loadedSettings) setSettings(loadedSettings);
+        if (loadedSettings) {
+          setSettings(loadedSettings);
+          try {
+            localStorage.setItem('bsnl_cached_settings', JSON.stringify(loadedSettings));
+          } catch {}
+        }
         if (loadedEntries) setEntries(sortEntriesChronologically(loadedEntries));
         if (loadedUsers && loadedUsers.length > 0) setUsers(loadedUsers);
       } catch (err) {
@@ -168,34 +181,29 @@ export function App() {
     }
   }
 
-  async function handleUpdateLogo(url: string) {
+  async function handleUpdateLogo(url: string): Promise<void> {
+    const updated = await api.updateSettings({ logoUrl: url });
+    setSettings(updated);
     try {
-      const updated = await api.updateSettings({ logoUrl: url });
-      setSettings(updated);
-    } catch (err) {
-      console.error('Failed to update logo on backend:', err);
-      setSettings((prev) => ({ ...prev, logoUrl: url }));
-    }
+      localStorage.setItem('bsnl_cached_settings', JSON.stringify(updated));
+    } catch {}
   }
 
-  async function handleUpdateVehicleImg(url: string) {
+  async function handleUpdateVehicleImg(url: string): Promise<void> {
+    const updated = await api.updateSettings({ vehicleImg: url });
+    setSettings(updated);
     try {
-      const updated = await api.updateSettings({ vehicleImg: url });
-      setSettings(updated);
-    } catch (err) {
-      console.error('Failed to update vehicle image on backend:', err);
-      setSettings((prev) => ({ ...prev, vehicleImg: url }));
-    }
+      localStorage.setItem('bsnl_cached_settings', JSON.stringify(updated));
+    } catch {}
   }
 
   async function handleChangeAdminPassword(newPw: string) {
-    const updatedSettings = { ...settings, adminPassword: newPw };
-    setSettings(updatedSettings);
+    const updated = await api.updateSettings({ adminPassword: newPw });
+    setSettings(updated);
     try {
-      await api.saveSettings(updatedSettings);
-    } catch (err) {
-      console.error('Failed to update admin password on backend:', err);
-    }
+      localStorage.setItem('bsnl_cached_settings', JSON.stringify(updated));
+    } catch {}
+    return updated;
   }
 
   async function handleToggleMonthClose(monthKey: string) {
@@ -205,13 +213,12 @@ export function App() {
       ? currentClosed.filter((m) => m !== monthKey)
       : [...currentClosed, monthKey];
 
-    const updatedSettings: AppSettings = { ...settings, closedMonths: updatedClosed };
-    setSettings(updatedSettings);
+    const updated = await api.updateSettings({ closedMonths: updatedClosed });
+    setSettings(updated);
     try {
-      await api.saveSettings(updatedSettings);
-    } catch (err) {
-      console.error('Failed to sync closedMonths to backend:', err);
-    }
+      localStorage.setItem('bsnl_cached_settings', JSON.stringify(updated));
+    } catch {}
+    return updated;
   }
 
   async function handleSyncEntries(updatedEntries?: LogEntry[]): Promise<boolean> {

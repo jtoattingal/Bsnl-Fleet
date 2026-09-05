@@ -10,20 +10,27 @@ export const api = {
   },
 
   async saveEntry(entry: LogEntry): Promise<LogEntry> {
-    const isNew = !entry.id || entry.id.length > 20; // or newly created
-    const method = 'POST';
-    const res = await fetch(`${API_BASE}/entries`, {
+    const isUpdate = Boolean(entry.id);
+    const method = isUpdate ? 'PUT' : 'POST';
+    const url = isUpdate ? `${API_BASE}/entries/${entry.id}` : `${API_BASE}/entries`;
+    const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(entry),
     });
-    if (!res.ok) throw new Error('Failed to save entry');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to save entry');
+    }
     return res.json();
   },
 
   async deleteEntry(id: string): Promise<boolean> {
     const res = await fetch(`${API_BASE}/entries/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to delete entry');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to delete entry');
+    }
     return true;
   },
 
@@ -33,7 +40,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ entries }),
     });
-    if (!res.ok) throw new Error('Failed to sync entries to database');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to sync entries to database');
+    }
     return true;
   },
 
@@ -124,7 +134,11 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ users }),
     });
-    return res.ok;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to sync users to database');
+    }
+    return true;
   },
 
   async getSettings(): Promise<AppSettings> {

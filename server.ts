@@ -9,7 +9,8 @@ dotenv.config();
 const PORT = 3000;
 const app = express();
 
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -118,11 +119,12 @@ app.post('/api/entries', async (req, res) => {
       return res.status(400).json({ error: 'Entries must start from September 2026 reading onwards.' });
     }
 
-    // Reject if month is closed
+    // Reject if month is closed (unless admin is creating or editing)
     const entryMonth = entryData.date ? entryData.date.slice(0, 7) : '';
     const settings = await DB.getSettings();
     const closedMonths: string[] = settings.closedMonths || [];
-    if (closedMonths.includes(entryMonth)) {
+    const isAdminAction = entryData.isAdmin || entryData.user === 'admin' || req.headers['x-admin'] === 'true';
+    if (!isAdminAction && closedMonths.includes(entryMonth)) {
       return res.status(403).json({ error: 'This month has been closed by the Administrator. No new entries can be added.' });
     }
 
@@ -137,6 +139,21 @@ app.post('/api/entries', async (req, res) => {
     const saved = await DB.saveEntry(entryData);
     res.status(201).json(saved);
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sync all entries at once (Admin Save Logbook to Database) - Must be before /api/entries/:id
+app.put('/api/entries/sync', async (req, res) => {
+  try {
+    const { entries } = req.body;
+    if (Array.isArray(entries)) {
+      const saved = await DB.syncEntries(entries);
+      return res.json({ success: true, count: saved.length });
+    }
+    res.status(400).json({ error: 'entries array expected' });
+  } catch (err: any) {
+    console.error('Error in /api/entries/sync:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -158,20 +175,6 @@ app.put('/api/entries/:id', async (req, res) => {
 
     const saved = await DB.saveEntry(entryData);
     res.json(saved);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Sync all entries at once (Admin Save Logbook to Database)
-app.put('/api/entries/sync', async (req, res) => {
-  try {
-    const { entries } = req.body;
-    if (Array.isArray(entries)) {
-      const saved = await DB.syncEntries(entries);
-      return res.json({ success: true, count: saved.length });
-    }
-    res.status(400).json({ error: 'entries array expected' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

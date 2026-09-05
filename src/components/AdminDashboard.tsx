@@ -270,20 +270,79 @@ export function AdminDashboard({
     setTimeout(() => setUserMsg(''), 3000);
   }
 
-  function handleFileUpload(
+  function compressImage(file: File, maxWidth: number, maxHeight: number, quality = 0.85): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const format = file.type === 'image/png' || file.type === 'image/svg+xml' ? 'image/png' : 'image/jpeg';
+          const dataUrl = canvas.toDataURL(format, quality);
+          resolve(dataUrl);
+        };
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleFileUpload(
     e: React.ChangeEvent<HTMLInputElement>,
     setPreview: (url: string) => void,
-    setValue: (url: string) => void
+    setValue: (url: string) => void,
+    type: 'logo' | 'vehicle'
   ) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const result = ev.target?.result as string;
-      setPreview(result);
-      setValue(result);
-    };
-    reader.readAsDataURL(file);
+
+    try {
+      const maxDim = type === 'logo' ? { w: 500, h: 250 } : { w: 1200, h: 800 };
+      const quality = type === 'logo' ? 0.9 : 0.85;
+      const compressedDataUrl = await compressImage(file, maxDim.w, maxDim.h, quality);
+
+      setPreview(compressedDataUrl);
+      setValue(compressedDataUrl);
+
+      // Automatically save to database immediately so it is effective and persists across refreshes
+      if (type === 'logo') {
+        setLogoMsg('Saving logo to database...');
+        await onUpdateLogo(compressedDataUrl);
+        setLogoMsg('✓ Logo uploaded, saved to database, and now effective.');
+        setTimeout(() => setLogoMsg(''), 4000);
+      } else {
+        setVehicleMsg('Saving vehicle photo to database...');
+        await onUpdateVehicleImg(compressedDataUrl);
+        setVehicleMsg('✓ Vehicle photo uploaded, saved to database, and now effective.');
+        setTimeout(() => setVehicleMsg(''), 4000);
+      }
+    } catch (err: any) {
+      console.error(`Failed to save ${type}:`, err);
+      if (type === 'logo') {
+        setLogoMsg(`Error saving logo: ${err.message || 'Failed'}`);
+      } else {
+        setVehicleMsg(`Error saving vehicle photo: ${err.message || 'Failed'}`);
+      }
+    }
   }
 
   function handleChangeAdminPassword() {
@@ -883,11 +942,12 @@ export function AdminDashboard({
                         type="button"
                         onClick={async () => {
                           try {
+                            setLogoMsg('Saving logo to database...');
                             await onUpdateLogo(inputLogoUrl);
-                            setLogoMsg('✓ Logo saved and made effective.');
-                            setTimeout(() => setLogoMsg(''), 3000);
+                            setLogoMsg('✓ Logo saved to database and made effective.');
+                            setTimeout(() => setLogoMsg(''), 4000);
                           } catch (err: any) {
-                            setLogoMsg('Failed to save logo.');
+                            setLogoMsg(`Failed to save logo: ${err.message || 'Error'}`);
                           }
                         }}
                         className="bg-[#003087] text-white text-xs font-semibold px-3 py-2 rounded hover:bg-[#00236A] transition-colors whitespace-nowrap cursor-pointer"
@@ -899,11 +959,15 @@ export function AdminDashboard({
                         <button
                           type="button"
                           onClick={async () => {
-                            setInputLogoUrl('');
-                            setLogoPreview('');
-                            await onUpdateLogo('');
-                            setLogoMsg('✓ Logo removed and database updated.');
-                            setTimeout(() => setLogoMsg(''), 3000);
+                            try {
+                              setInputLogoUrl('');
+                              setLogoPreview('');
+                              await onUpdateLogo('');
+                              setLogoMsg('✓ Logo removed and database updated.');
+                              setTimeout(() => setLogoMsg(''), 4000);
+                            } catch (err: any) {
+                              setLogoMsg(`Failed to remove logo: ${err.message || 'Error'}`);
+                            }
                           }}
                           className="text-xs text-[#5A6A82] hover:text-red-500 px-2 py-2 cursor-pointer whitespace-nowrap"
                           style={{ fontFamily: "'Work Sans', sans-serif" }}
@@ -941,14 +1005,14 @@ export function AdminDashboard({
                           Choose image file
                         </div>
                         <div className="text-xs text-[#8A99AE]" style={{ fontFamily: "'Inter', sans-serif" }}>
-                          PNG, JPG, SVG accepted
+                          PNG, JPG, SVG accepted (auto-compressed & saved to DB)
                         </div>
                       </div>
                       <input
                         type="file"
                         accept="image/*"
                         className="hidden"
-                        onChange={(e) => handleFileUpload(e, setLogoPreview, setInputLogoUrl)}
+                        onChange={(e) => handleFileUpload(e, setLogoPreview, setInputLogoUrl, 'logo')}
                       />
                     </label>
                     {inputLogoUrl.startsWith('data:') && (
@@ -957,11 +1021,12 @@ export function AdminDashboard({
                           type="button"
                           onClick={async () => {
                             try {
+                              setLogoMsg('Saving uploaded logo to database...');
                               await onUpdateLogo(inputLogoUrl);
-                              setLogoMsg('✓ Logo uploaded, saved and made effective.');
-                              setTimeout(() => setLogoMsg(''), 3000);
+                              setLogoMsg('✓ Logo uploaded, saved to database, and made effective.');
+                              setTimeout(() => setLogoMsg(''), 4000);
                             } catch (err: any) {
-                              setLogoMsg('Failed to save uploaded logo.');
+                              setLogoMsg(`Failed to save uploaded logo: ${err.message || 'Error'}`);
                             }
                           }}
                           className="bg-[#003087] text-white text-xs font-semibold px-4 py-2 rounded hover:bg-[#00236A] transition-colors cursor-pointer"
@@ -972,11 +1037,15 @@ export function AdminDashboard({
                         <button
                           type="button"
                           onClick={async () => {
-                            setInputLogoUrl('');
-                            setLogoPreview('');
-                            await onUpdateLogo('');
-                            setLogoMsg('✓ Logo removed.');
-                            setTimeout(() => setLogoMsg(''), 3000);
+                            try {
+                              setInputLogoUrl('');
+                              setLogoPreview('');
+                              await onUpdateLogo('');
+                              setLogoMsg('✓ Logo removed and database updated.');
+                              setTimeout(() => setLogoMsg(''), 4000);
+                            } catch (err: any) {
+                              setLogoMsg(`Failed to remove logo: ${err.message || 'Error'}`);
+                            }
                           }}
                           className="text-xs text-[#5A6A82] hover:text-red-500 px-2 py-2 cursor-pointer"
                           style={{ fontFamily: "'Work Sans', sans-serif" }}
@@ -1037,11 +1106,12 @@ export function AdminDashboard({
                         type="button"
                         onClick={async () => {
                           try {
+                            setVehicleMsg('Saving vehicle photo to database...');
                             await onUpdateVehicleImg(inputVehicleImg);
-                            setVehicleMsg('✓ Vehicle picture saved and made effective.');
-                            setTimeout(() => setVehicleMsg(''), 3000);
+                            setVehicleMsg('✓ Vehicle picture saved to database and made effective.');
+                            setTimeout(() => setVehicleMsg(''), 4000);
                           } catch (err: any) {
-                            setVehicleMsg('Failed to save vehicle picture.');
+                            setVehicleMsg(`Failed to save vehicle picture: ${err.message || 'Error'}`);
                           }
                         }}
                         className="bg-[#003087] text-white text-xs font-semibold px-3 py-2 rounded hover:bg-[#00236A] transition-colors whitespace-nowrap cursor-pointer"
@@ -1053,11 +1123,15 @@ export function AdminDashboard({
                         <button
                           type="button"
                           onClick={async () => {
-                            setInputVehicleImg('');
-                            setVehiclePreview('');
-                            await onUpdateVehicleImg('');
-                            setVehicleMsg('✓ Vehicle picture reset to default and database updated.');
-                            setTimeout(() => setVehicleMsg(''), 3000);
+                            try {
+                              setInputVehicleImg('');
+                              setVehiclePreview('');
+                              await onUpdateVehicleImg('');
+                              setVehicleMsg('✓ Vehicle picture reset to default and database updated.');
+                              setTimeout(() => setVehicleMsg(''), 4000);
+                            } catch (err: any) {
+                              setVehicleMsg(`Failed to reset vehicle picture: ${err.message || 'Error'}`);
+                            }
                           }}
                           className="text-xs text-[#5A6A82] hover:text-red-500 px-2 py-2 cursor-pointer whitespace-nowrap"
                           style={{ fontFamily: "'Work Sans', sans-serif" }}
@@ -1095,14 +1169,14 @@ export function AdminDashboard({
                           Choose vehicle photo
                         </div>
                         <div className="text-xs text-[#8A99AE]" style={{ fontFamily: "'Inter', sans-serif" }}>
-                          PNG, JPG, WEBP accepted
+                          PNG, JPG, WEBP accepted (auto-compressed & saved to DB)
                         </div>
                       </div>
                       <input
                         type="file"
                         accept="image/*"
                         className="hidden"
-                        onChange={(e) => handleFileUpload(e, setVehiclePreview, setInputVehicleImg)}
+                        onChange={(e) => handleFileUpload(e, setVehiclePreview, setInputVehicleImg, 'vehicle')}
                       />
                     </label>
                     {inputVehicleImg.startsWith('data:') && (
@@ -1111,11 +1185,12 @@ export function AdminDashboard({
                           type="button"
                           onClick={async () => {
                             try {
+                              setVehicleMsg('Saving uploaded vehicle photo to database...');
                               await onUpdateVehicleImg(inputVehicleImg);
-                              setVehicleMsg('✓ Vehicle picture uploaded, saved and made effective.');
-                              setTimeout(() => setVehicleMsg(''), 3000);
+                              setVehicleMsg('✓ Vehicle picture uploaded, saved to database, and now effective.');
+                              setTimeout(() => setVehicleMsg(''), 4000);
                             } catch (err: any) {
-                              setVehicleMsg('Failed to save vehicle picture.');
+                              setVehicleMsg(`Failed to save vehicle picture: ${err.message || 'Error'}`);
                             }
                           }}
                           className="bg-[#003087] text-white text-xs font-semibold px-4 py-2 rounded hover:bg-[#00236A] transition-colors cursor-pointer"
@@ -1126,11 +1201,15 @@ export function AdminDashboard({
                         <button
                           type="button"
                           onClick={async () => {
-                            setInputVehicleImg('');
-                            setVehiclePreview('');
-                            await onUpdateVehicleImg('');
-                            setVehicleMsg('✓ Vehicle photo removed.');
-                            setTimeout(() => setVehicleMsg(''), 3000);
+                            try {
+                              setInputVehicleImg('');
+                              setVehiclePreview('');
+                              await onUpdateVehicleImg('');
+                              setVehicleMsg('✓ Vehicle photo removed and database updated.');
+                              setTimeout(() => setVehicleMsg(''), 4000);
+                            } catch (err: any) {
+                              setVehicleMsg(`Failed to remove vehicle photo: ${err.message || 'Error'}`);
+                            }
                           }}
                           className="text-xs text-[#5A6A82] hover:text-red-500 px-2 py-2 cursor-pointer"
                           style={{ fontFamily: "'Work Sans', sans-serif" }}

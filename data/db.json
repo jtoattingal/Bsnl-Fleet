@@ -1,0 +1,94 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "username": "jto_attingal",
+      "name": "JTO (Network), Attingal",
+      "designation": "Junior Telecom Officer (Network)",
+      "password": "Bsnl",
+      "active": true
+    },
+    {
+      "id": "2",
+      "username": "jto_varkala",
+      "name": "JTO (Network), Varkala",
+      "designation": "Junior Telecom Officer (Network)",
+      "password": "Bsnl",
+      "active": true
+    },
+    {
+      "id": "3",
+      "username": "sde_kilimanoor",
+      "name": "SDE (Network), Kilimanoor",
+      "designation": "Sub-Divisional Engineer (Network)",
+      "password": "Bsnl",
+      "active": true
+    },
+    {
+      "id": "4",
+      "username": "agm_attingal",
+      "name": "AGM (Network), Attingal",
+      "designation": "Assistant General Manager (Network)",
+      "password": "Bsnl",
+      "active": true
+    }
+  ],
+  "entries": [
+    {
+      "id": "1",
+      "date": "2026-09-01",
+      "startTime": "09:00",
+      "startStation": "Attingal",
+      "actualOMR": 12340,
+      "logbookOMR": 12335,
+      "placesVisited": "Attingal, Varkala, Chirayinkeezhu",
+      "purpose": "BTS maintenance, battery reading",
+      "endStation": "Attingal",
+      "actualCMR": 12412,
+      "logbookCMR": 12417,
+      "km": 82,
+      "remarks": "",
+      "user": "jto_attingal"
+    },
+    {
+      "id": "2",
+      "date": "2026-09-02",
+      "startTime": "08:30",
+      "startStation": "Kallambalam",
+      "actualOMR": 12412,
+      "logbookOMR": 12398,
+      "placesVisited": "Kallambalam, Kilimanoor, Attingal",
+      "purpose": "Site inspection, updated",
+      "endStation": "Kilimanoor",
+      "actualCMR": 12530,
+      "logbookCMR": 12547,
+      "km": 149,
+      "remarks": "Updated by Admin",
+      "user": "sde_kilimanoor"
+    },
+    {
+      "id": "3",
+      "date": "2026-09-04",
+      "startTime": "10:00",
+      "startStation": "Attingal",
+      "actualOMR": 12530,
+      "logbookOMR": 12525,
+      "placesVisited": "Attingal, Varkala",
+      "purpose": "Network fault rectification",
+      "endStation": "Attingal",
+      "actualCMR": 12574,
+      "logbookCMR": 12579,
+      "km": 54,
+      "remarks": "",
+      "user": "jto_varkala"
+    }
+  ],
+  "settings": {
+    "vehicleRegistration": "KL 19 L 6865",
+    "monthlyAllowance": 2000,
+    "logoUrl": "",
+    "vehicleImg": "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=60",
+    "adminPassword": "Bsnlatt",
+    "closedMonths": []
+  }
+}

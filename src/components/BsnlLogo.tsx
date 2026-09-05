@@ -5,10 +5,21 @@ interface BsnlLogoProps {
 }
 
 export function BsnlLogo({ logoUrl }: BsnlLogoProps) {
+  const [loadError, setLoadError] = React.useState(false);
+
+  React.useEffect(() => {
+    setLoadError(false);
+  }, [logoUrl]);
+
   return (
     <div className="flex items-center gap-2.5">
-      {logoUrl ? (
-        <img src={logoUrl} alt="BSNL Logo" className="h-8 max-w-[120px] object-contain" />
+      {logoUrl && !loadError ? (
+        <img
+          src={logoUrl}
+          alt="BSNL Logo"
+          className="h-8 max-w-[120px] object-contain"
+          onError={() => setLoadError(true)}
+        />
       ) : (
         <div className="w-8 h-8 rounded-full bg-[#003087] flex items-center justify-center text-white font-bold text-xs tracking-wider shadow-sm shrink-0">
           BSNL

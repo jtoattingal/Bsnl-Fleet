@@ -121,6 +121,48 @@ async function seedMongoIfEmpty() {
   }
 }
 
+function sortEntriesList(entries: any[]) {
+  if (!Array.isArray(entries)) return [];
+  return [...entries].sort((a, b) => {
+    const dateA = String(a?.date || '');
+    const dateB = String(b?.date || '');
+    if (dateA !== dateB) return dateA.localeCompare(dateB);
+    const timeA = String(a?.startTime || '');
+    const timeB = String(b?.startTime || '');
+    return timeA.localeCompare(timeB);
+  });
+}
+
+function sanitizeEntry(e: any): IEntry {
+  return {
+    id: String(e.id || Date.now().toString() + Math.floor(Math.random() * 1000)),
+    date: String(e.date || ''),
+    startTime: String(e.startTime || ''),
+    startStation: String(e.startStation || 'Attingal'),
+    actualOMR: Number(e.actualOMR) || 0,
+    logbookOMR: Number(e.logbookOMR) || 0,
+    placesVisited: String(e.placesVisited || ''),
+    purpose: String(e.purpose || ''),
+    endStation: String(e.endStation || 'Attingal'),
+    actualCMR: Number(e.actualCMR) || 0,
+    logbookCMR: Number(e.logbookCMR) || 0,
+    km: Number(e.km) || 0,
+    remarks: String(e.remarks || ''),
+    user: String(e.user || ''),
+  };
+}
+
+function sanitizeUser(u: any): IUser {
+  return {
+    id: String(u.id || Date.now().toString() + Math.floor(Math.random() * 1000)),
+    username: String(u.username || '').trim().toLowerCase(),
+    name: String(u.name || '').trim(),
+    designation: String(u.designation || '').trim(),
+    password: String(u.password || 'Bsnl'),
+    active: u.active !== false,
+  };
+}
+
 // Unified Database Access Layer (Works with MongoDB when connected, durable JSON otherwise)
 export const DB = {
   async getUsers() {
@@ -190,67 +232,45 @@ export const DB = {
   },
 
   async syncUsers(users: any[]) {
+    const cleanUsers = (users || []).map(sanitizeUser);
     if (isMongoConnected) {
       await (UserModel as any).deleteMany({});
-      if (users.length > 0) {
-        await (UserModel as any).insertMany(users);
+      if (cleanUsers.length > 0) {
+        await (UserModel as any).insertMany(cleanUsers);
       }
     }
     const data = loadLocalDB();
-    data.users = users;
+    data.users = cleanUsers;
     saveLocalDB(data);
-    return users;
+    return cleanUsers;
   },
 
   async getEntries() {
     if (isMongoConnected) {
       const entries = await (EntryModel as any).find().lean();
-      const mapped = entries.map((e: any) => ({
-        id: e.id,
-        date: e.date,
-        startTime: e.startTime,
-        startStation: e.startStation,
-        actualOMR: e.actualOMR,
-        logbookOMR: e.logbookOMR,
-        placesVisited: e.placesVisited,
-        purpose: e.purpose,
-        endStation: e.endStation,
-        actualCMR: e.actualCMR,
-        logbookCMR: e.logbookCMR,
-        km: e.km,
-        remarks: e.remarks,
-        user: e.user,
-      }));
-      return mapped.sort((a: any, b: any) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return (a.startTime || '').localeCompare(b.startTime || '');
-      });
+      const mapped = entries.map((e: any) => sanitizeEntry(e));
+      return sortEntriesList(mapped);
     }
     const data = loadLocalDB();
-    return [...data.entries].sort((a: any, b: any) => {
-      if (a.date !== b.date) return a.date.localeCompare(b.date);
-      return (a.startTime || '').localeCompare(b.startTime || '');
-    });
+    return sortEntriesList(data.entries || []);
   },
 
   async saveEntry(entry: IEntry) {
+    const clean = sanitizeEntry(entry);
     if (isMongoConnected) {
-      await (EntryModel as any).findOneAndUpdate({ id: entry.id }, entry, { upsert: true });
+      await (EntryModel as any).findOneAndUpdate({ id: clean.id }, clean, { upsert: true });
     }
     const data = loadLocalDB();
-    const idx = data.entries.findIndex((e) => e.id === entry.id);
+    if (!Array.isArray(data.entries)) data.entries = [];
+    const idx = data.entries.findIndex((e) => e.id === clean.id);
     if (idx >= 0) {
-      data.entries[idx] = entry;
+      data.entries[idx] = clean;
     } else {
-      data.entries.push(entry);
+      data.entries.push(clean);
     }
-    // Keep sorted by date and start time ascending
-    data.entries.sort((a, b) => {
-      if (a.date !== b.date) return a.date.localeCompare(b.date);
-      return (a.startTime || '').localeCompare(b.startTime || '');
-    });
+    data.entries = sortEntriesList(data.entries);
     saveLocalDB(data);
-    return entry;
+    return clean;
   },
 
   async deleteEntry(id: string) {
@@ -258,23 +278,21 @@ export const DB = {
       await (EntryModel as any).deleteOne({ id });
     }
     const data = loadLocalDB();
-    data.entries = data.entries.filter((e) => e.id !== id);
+    data.entries = (data.entries || []).filter((e) => e.id !== id);
     saveLocalDB(data);
     return true;
   },
 
   async syncEntries(entries: IEntry[]) {
+    const cleanEntries = (entries || []).map(sanitizeEntry);
     if (isMongoConnected) {
       await (EntryModel as any).deleteMany({});
-      if (entries.length > 0) {
-        await (EntryModel as any).insertMany(entries);
+      if (cleanEntries.length > 0) {
+        await (EntryModel as any).insertMany(cleanEntries);
       }
     }
     const data = loadLocalDB();
-    data.entries = [...entries].sort((a, b) => {
-      if (a.date !== b.date) return a.date.localeCompare(b.date);
-      return (a.startTime || '').localeCompare(b.startTime || '');
-    });
+    data.entries = sortEntriesList(cleanEntries);
     saveLocalDB(data);
     return data.entries;
   },
@@ -314,22 +332,30 @@ export const DB = {
   },
 
   async getSettings() {
+    const defaults = {
+      vehicleRegistration: DEFAULT_VEHICLE_REGISTRATION,
+      monthlyAllowance: DEFAULT_MONTHLY_ALLOWANCE,
+      logoUrl: '',
+      vehicleImg: DEFAULT_VEHICLE_IMG,
+      adminPassword: 'Bsnlatt',
+      closedMonths: [],
+    };
+
     if (isMongoConnected) {
-      const doc = await (SettingModel as any).findOne({ key: 'appConfig' }).lean();
-      if (doc && doc.value) {
-        return doc.value;
+      try {
+        const doc = await (SettingModel as any).findOne({ key: 'appConfig' }).lean();
+        if (doc && doc.value) {
+          return { ...defaults, ...doc.value };
+        }
+      } catch (err) {
+        console.error('Error reading settings from MongoDB:', err);
       }
     }
     const data = loadLocalDB();
-    return (
-      data.settings || {
-        vehicleRegistration: DEFAULT_VEHICLE_REGISTRATION,
-        monthlyAllowance: DEFAULT_MONTHLY_ALLOWANCE,
-        logoUrl: '',
-        vehicleImg: DEFAULT_VEHICLE_IMG,
-        adminPassword: 'Bsnlatt',
-      }
-    );
+    return {
+      ...defaults,
+      ...(data.settings || {}),
+    };
   },
 
   async updateSettings(updates: any) {
@@ -337,16 +363,18 @@ export const DB = {
     const updated = { ...current, ...updates };
 
     if (isMongoConnected) {
-      // Purge any and all previous settings/image documents so only the present one is kept in MongoDB
-      await (SettingModel as any).deleteMany({});
-      await (SettingModel as any).create({
-        key: 'appConfig',
-        value: updated,
-      });
+      try {
+        await (SettingModel as any).findOneAndUpdate(
+          { key: 'appConfig' },
+          { key: 'appConfig', value: updated },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        console.error('Error saving settings to MongoDB:', err);
+      }
     }
 
     const data = loadLocalDB();
-    // Overwrite previous settings so only present logo and vehicle picture details exist
     data.settings = updated;
     saveLocalDB(data);
     return updated;
