@@ -254,7 +254,7 @@ export function MonthlyReportView({
                   BSNL · Kerala Telecom Circle
                 </div>
                 <div className="text-[#5A6A82] text-xs" style={{ fontFamily: "'Inter', sans-serif" }}>
-                  Attingal Sub-Division / Secondary Switching Area
+                  Attingal Network Division, Trivandrum Business Area
                 </div>
               </div>
             </div>

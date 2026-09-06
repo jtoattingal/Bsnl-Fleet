@@ -12,6 +12,18 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Ensure database connection is active for all API requests
+app.use(async (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    try {
+      await initDatabase();
+    } catch (e) {
+      console.warn('DB check in middleware:', e);
+    }
+  }
+  next();
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -114,9 +126,9 @@ app.post('/api/entries', async (req, res) => {
   try {
     const entryData = req.body;
 
-    // Start from September 2026 onwards
-    if (entryData.date && entryData.date < '2026-09-01') {
-      return res.status(400).json({ error: 'Entries must start from September 2026 reading onwards.' });
+    // Validate date format
+    if (!entryData.date || isNaN(Date.parse(entryData.date))) {
+      return res.status(400).json({ error: 'A valid date is required for the log entry.' });
     }
 
     // Reject if month is closed (unless admin is creating or editing)
@@ -163,9 +175,18 @@ app.put('/api/entries/:id', async (req, res) => {
     const { id } = req.params;
     const entryData = { ...req.body, id };
 
-    // Start from September 2026 onwards
-    if (entryData.date && entryData.date < '2026-09-01') {
-      return res.status(400).json({ error: 'Entries must start from September 2026 reading onwards.' });
+    // Validate date format
+    if (!entryData.date || isNaN(Date.parse(entryData.date))) {
+      return res.status(400).json({ error: 'A valid date is required for the log entry.' });
+    }
+
+    // Reject if month is closed (unless admin is editing)
+    const entryMonth = entryData.date ? entryData.date.slice(0, 7) : '';
+    const settings = await DB.getSettings();
+    const closedMonths: string[] = settings.closedMonths || [];
+    const isAdminAction = entryData.isAdmin || entryData.user === 'admin' || req.headers['x-admin'] === 'true';
+    if (!isAdminAction && closedMonths.includes(entryMonth)) {
+      return res.status(403).json({ error: 'This month has been closed by the Administrator. Log entries cannot be edited after month closing.' });
     }
 
     // Meter validation
@@ -376,4 +397,8 @@ async function startServer() {
   });
 }
 
-startServer();
+export default app;
+
+if (process.env.VERCEL !== '1' && process.env.NETLIFY !== 'true') {
+  startServer();
+}

@@ -1,6 +1,6 @@
 import { AppSettings, LogEntry, User } from './types';
 
-const API_BASE = '/api';
+const API_BASE = ((import.meta as any).env?.VITE_API_URL || '/api').replace(/\/$/, '');
 
 export const api = {
   async getEntries(): Promise<LogEntry[]> {

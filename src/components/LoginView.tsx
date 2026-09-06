@@ -199,7 +199,7 @@ export function LoginView({
           className="text-center text-[#8A99AE] text-xs mt-4"
           style={{ fontFamily: "'Inter', sans-serif" }}
         >
-          BSNL Attingal Network · Confidential Internal System
+          Attingal Network Division, Trivandrum Business Area · Confidential Internal System
         </p>
       </div>
     </div>

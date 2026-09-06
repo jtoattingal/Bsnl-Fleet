@@ -8,6 +8,8 @@ import {
   DEFAULT_USERS,
   DEFAULT_VEHICLE_IMG,
   DEFAULT_VEHICLE_REGISTRATION,
+  calcOpeningOMR,
+  calcClosingCMR,
 } from '../src/constants';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -30,7 +32,13 @@ function loadLocalDB(): LocalDBData {
   try {
     if (fs.existsSync(BACKUP_FILE)) {
       const raw = fs.readFileSync(BACKUP_FILE, 'utf-8');
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        if (!Array.isArray(parsed.entries)) {
+          parsed.entries = parsed.settings?.sampleDataCleared ? [] : DEFAULT_ENTRIES;
+        }
+        return parsed;
+      }
     }
   } catch (err) {
     console.error('Failed to read local DB file:', err);
@@ -45,6 +53,8 @@ function loadLocalDB(): LocalDBData {
       logoUrl: '',
       vehicleImg: DEFAULT_VEHICLE_IMG,
       adminPassword: 'Bsnlatt',
+      closedMonths: [],
+      sampleDataCleared: false,
     },
   };
 
@@ -69,6 +79,10 @@ export async function initDatabase() {
   const uri = process.env.MONGODB_URI;
 
   if (uri) {
+    if (mongoose.connection.readyState === 1) {
+      isMongoConnected = true;
+      return;
+    }
     try {
       console.log('Connecting to MongoDB at:', uri.replace(/:([^:@]{3,})@/, ':***@'));
       await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
@@ -96,12 +110,6 @@ async function seedMongoIfEmpty() {
       await UserModel.insertMany(DEFAULT_USERS as any);
     }
 
-    const entryCount = await EntryModel.countDocuments();
-    if (entryCount === 0) {
-      console.log('Seeding initial MongoDB entries...');
-      await EntryModel.insertMany(DEFAULT_ENTRIES as any);
-    }
-
     const existingSettings = await SettingModel.findOne({ key: 'appConfig' } as any);
     if (!existingSettings) {
       console.log('Seeding initial MongoDB settings...');
@@ -113,8 +121,20 @@ async function seedMongoIfEmpty() {
           logoUrl: '',
           vehicleImg: DEFAULT_VEHICLE_IMG,
           adminPassword: 'Bsnlatt',
+          closedMonths: [],
+          sampleDataCleared: false,
         },
       });
+    }
+
+    const settingsVal = (existingSettings as any)?.value || {};
+    // CRITICAL: If the user cleared sample data, do NOT resurrect sample entries!
+    if (!settingsVal.sampleDataCleared) {
+      const entryCount = await EntryModel.countDocuments();
+      if (entryCount === 0) {
+        console.log('Seeding initial MongoDB entries...');
+        await EntryModel.insertMany(DEFAULT_ENTRIES as any);
+      }
     }
   } catch (err) {
     console.error('Error seeding MongoDB:', err);
@@ -134,19 +154,31 @@ function sortEntriesList(entries: any[]) {
 }
 
 function sanitizeEntry(e: any): IEntry {
+  const startStation = String(e.startStation || 'Attingal');
+  const endStation = String(e.endStation || 'Attingal');
+  const actualOMR = Number(e.actualOMR) || 0;
+  const actualCMR = Number(e.actualCMR) || 0;
+
+  const logbookOMR =
+    Number(e.logbookOMR) || (actualOMR ? calcOpeningOMR(actualOMR, startStation) : 0);
+  const logbookCMR =
+    Number(e.logbookCMR) || (actualCMR ? calcClosingCMR(actualCMR, endStation) : 0);
+  const km =
+    Number(e.km) || (logbookCMR && logbookOMR ? logbookCMR - logbookOMR : 0);
+
   return {
     id: String(e.id || Date.now().toString() + Math.floor(Math.random() * 1000)),
     date: String(e.date || ''),
     startTime: String(e.startTime || ''),
-    startStation: String(e.startStation || 'Attingal'),
-    actualOMR: Number(e.actualOMR) || 0,
-    logbookOMR: Number(e.logbookOMR) || 0,
+    startStation,
+    actualOMR,
+    logbookOMR,
     placesVisited: String(e.placesVisited || ''),
     purpose: String(e.purpose || ''),
-    endStation: String(e.endStation || 'Attingal'),
-    actualCMR: Number(e.actualCMR) || 0,
-    logbookCMR: Number(e.logbookCMR) || 0,
-    km: Number(e.km) || 0,
+    endStation,
+    actualCMR,
+    logbookCMR,
+    km,
     remarks: String(e.remarks || ''),
     user: String(e.user || ''),
   };
@@ -323,12 +355,24 @@ export const DB = {
   async clearAllEntries() {
     if (isMongoConnected) {
       await (EntryModel as any).deleteMany({});
+      try {
+        const current = await this.getSettings();
+        await (SettingModel as any).findOneAndUpdate(
+          { key: 'appConfig' },
+          { key: 'appConfig', value: { ...current, sampleDataCleared: true } },
+          { upsert: true }
+        );
+      } catch (err) {
+        console.error('Error setting sampleDataCleared in MongoDB:', err);
+      }
     }
     const data = loadLocalDB();
-    const count = data.entries.length;
+    const count = (data.entries || []).length;
     data.entries = [];
+    if (!data.settings) data.settings = {};
+    data.settings.sampleDataCleared = true;
     saveLocalDB(data);
-    return { deleted: count };
+    return { deleted: count, sampleDataCleared: true };
   },
 
   async getSettings() {

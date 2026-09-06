@@ -10,6 +10,7 @@ interface UserDashboardProps {
   currentUser: User;
   entries: LogEntry[];
   onNewEntry: () => void;
+  onEditEntry?: (entry: LogEntry) => void;
   onReport: (year?: number, month?: number) => void;
   onLogout: () => void;
   logoUrl?: string;
@@ -22,6 +23,7 @@ export function UserDashboard({
   currentUser,
   entries,
   onNewEntry,
+  onEditEntry,
   onReport,
   onLogout,
   logoUrl = '',
@@ -282,7 +284,13 @@ export function UserDashboard({
               {monthlyEntries.length} entries
             </span>
           </div>
-          <EntriesTable entries={monthlyEntries} />
+          <EntriesTable
+            entries={monthlyEntries}
+            onEdit={onEditEntry}
+            isAdmin={false}
+            closedMonths={closedMonths}
+            isMonthClosed={isClosed}
+          />
         </div>
       </div>
     </div>

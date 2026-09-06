@@ -40,6 +40,7 @@ export interface AppSettings {
   vehicleImg: string;
   adminPassword?: string;
   closedMonths?: string[];
+  sampleDataCleared?: boolean;
 }
 
 export type AppView = 'login' | 'user' | 'admin' | 'new-entry' | 'report';

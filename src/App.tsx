@@ -28,7 +28,18 @@ export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentView, setCurrentView] = useState<AppView>('login');
-  const [entries, setEntries] = useState<LogEntry[]>(DEFAULT_ENTRIES);
+  const [entries, setEntries] = useState<LogEntry[]>(() => {
+    try {
+      const cachedSettings = localStorage.getItem('bsnl_cached_settings');
+      if (cachedSettings) {
+        const s = JSON.parse(cachedSettings);
+        if (s.sampleDataCleared) return [];
+      }
+      const cached = localStorage.getItem('bsnl_cached_entries');
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return DEFAULT_ENTRIES;
+  });
   const [users, setUsers] = useState<User[]>(DEFAULT_USERS);
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
@@ -43,6 +54,7 @@ export function App() {
       logoUrl: '',
       vehicleImg: DEFAULT_VEHICLE_IMG,
       adminPassword: 'Bsnlatt',
+      sampleDataCleared: false,
     };
   });
   const [editingEntry, setEditingEntry] = useState<LogEntry | undefined>(undefined);
@@ -55,8 +67,8 @@ export function App() {
       try {
         const [loadedSettings, loadedEntries, loadedUsers] = await Promise.all([
           api.getSettings().catch(() => null),
-          api.getEntries().catch(() => DEFAULT_ENTRIES),
-          api.getUsers().catch(() => DEFAULT_USERS),
+          api.getEntries().catch(() => null),
+          api.getUsers().catch(() => null),
         ]);
 
         if (loadedSettings) {
@@ -65,8 +77,27 @@ export function App() {
             localStorage.setItem('bsnl_cached_settings', JSON.stringify(loadedSettings));
           } catch {}
         }
-        if (loadedEntries) setEntries(sortEntriesChronologically(loadedEntries));
-        if (loadedUsers && loadedUsers.length > 0) setUsers(loadedUsers);
+
+        if (loadedEntries !== null && Array.isArray(loadedEntries)) {
+          setEntries(sortEntriesChronologically(loadedEntries));
+          try {
+            localStorage.setItem('bsnl_cached_entries', JSON.stringify(loadedEntries));
+          } catch {}
+        } else {
+          // Fallback to local cache
+          try {
+            const cached = localStorage.getItem('bsnl_cached_entries');
+            if (cached) {
+              setEntries(JSON.parse(cached));
+            } else if (!loadedSettings?.sampleDataCleared) {
+              setEntries(DEFAULT_ENTRIES);
+            }
+          } catch {}
+        }
+
+        if (loadedUsers && loadedUsers.length > 0) {
+          setUsers(loadedUsers);
+        }
       } catch (err) {
         console.error('Error initializing data from server:', err);
       } finally {
@@ -97,46 +128,67 @@ export function App() {
     setEditingEntry(undefined);
   }
 
-  async function handleSaveEntry(entry: LogEntry) {
+  async function handleSaveEntry(entry: LogEntry): Promise<void> {
     try {
       const saved = await api.saveEntry(entry);
       setEntries((prev) => {
-        const idx = prev.findIndex((e) => e.id === saved.id);
+        const idx = prev.findIndex((e) => e.id === saved.id || (editingEntry && e.id === editingEntry.id));
         const next = [...prev];
         if (idx >= 0) {
           next[idx] = saved;
         } else {
           next.push(saved);
         }
-        return sortEntriesChronologically(next);
+        const sorted = sortEntriesChronologically(next);
+        try {
+          localStorage.setItem('bsnl_cached_entries', JSON.stringify(sorted));
+        } catch {}
+        return sorted;
       });
       setEditingEntry(undefined);
       setCurrentView(isAdmin ? 'admin' : 'user');
     } catch (err: any) {
-      console.error('Error saving entry:', err);
-      // Fallback local update
+      console.error('Error saving entry to database:', err);
+      // Fallback local update to preserve user effort
       setEntries((prev) => {
-        const idx = prev.findIndex((e) => e.id === entry.id);
+        const idx = prev.findIndex((e) => e.id === entry.id || (editingEntry && e.id === editingEntry.id));
         const next = [...prev];
         if (idx >= 0) {
           next[idx] = entry;
         } else {
           next.push(entry);
         }
-        return sortEntriesChronologically(next);
+        const sorted = sortEntriesChronologically(next);
+        try {
+          localStorage.setItem('bsnl_cached_entries', JSON.stringify(sorted));
+        } catch {}
+        return sorted;
       });
       setEditingEntry(undefined);
       setCurrentView(isAdmin ? 'admin' : 'user');
+      throw err;
     }
   }
 
   async function handleDeleteEntry(id: string) {
     try {
       await api.deleteEntry(id);
-      setEntries((prev) => prev.filter((e) => e.id !== id));
+      setEntries((prev) => {
+        const next = prev.filter((e) => e.id !== id);
+        try {
+          localStorage.setItem('bsnl_cached_entries', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
     } catch (err: any) {
       console.error('Error deleting entry:', err);
-      setEntries((prev) => prev.filter((e) => e.id !== id));
+      setEntries((prev) => {
+        const next = prev.filter((e) => e.id !== id);
+        try {
+          localStorage.setItem('bsnl_cached_entries', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
     }
   }
 
@@ -182,19 +234,43 @@ export function App() {
   }
 
   async function handleUpdateLogo(url: string): Promise<void> {
-    const updated = await api.updateSettings({ logoUrl: url });
-    setSettings(updated);
+    setSettings((prev) => {
+      const next = { ...prev, logoUrl: url };
+      try {
+        localStorage.setItem('bsnl_cached_settings', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
     try {
-      localStorage.setItem('bsnl_cached_settings', JSON.stringify(updated));
-    } catch {}
+      const updated = await api.updateSettings({ logoUrl: url });
+      setSettings(updated);
+      try {
+        localStorage.setItem('bsnl_cached_settings', JSON.stringify(updated));
+      } catch {}
+    } catch (err) {
+      console.error('Failed to save logo to database:', err);
+      throw err;
+    }
   }
 
   async function handleUpdateVehicleImg(url: string): Promise<void> {
-    const updated = await api.updateSettings({ vehicleImg: url });
-    setSettings(updated);
+    setSettings((prev) => {
+      const next = { ...prev, vehicleImg: url };
+      try {
+        localStorage.setItem('bsnl_cached_settings', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
     try {
-      localStorage.setItem('bsnl_cached_settings', JSON.stringify(updated));
-    } catch {}
+      const updated = await api.updateSettings({ vehicleImg: url });
+      setSettings(updated);
+      try {
+        localStorage.setItem('bsnl_cached_settings', JSON.stringify(updated));
+      } catch {}
+    } catch (err) {
+      console.error('Failed to save vehicle picture to database:', err);
+      throw err;
+    }
   }
 
   async function handleChangeAdminPassword(newPw: string) {
@@ -225,6 +301,9 @@ export function App() {
     const listToSave = sortEntriesChronologically(updatedEntries || entries);
     setEntries(listToSave);
     try {
+      localStorage.setItem('bsnl_cached_entries', JSON.stringify(listToSave));
+    } catch {}
+    try {
       await api.syncEntries(listToSave);
       return true;
     } catch (err) {
@@ -248,22 +327,45 @@ export function App() {
   async function handleDeleteMonthEntries(monthKey: string): Promise<{ deleted: number }> {
     try {
       const res = await api.deleteMonthEntries(monthKey);
-      setEntries((prev) => prev.filter((e) => !e.date.startsWith(monthKey)));
+      setEntries((prev) => {
+        const next = prev.filter((e) => !e.date.startsWith(monthKey));
+        try {
+          localStorage.setItem('bsnl_cached_entries', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
       return res;
     } catch (err) {
       console.error('Failed to purge month entries from backend:', err);
-      setEntries((prev) => prev.filter((e) => !e.date.startsWith(monthKey)));
+      setEntries((prev) => {
+        const next = prev.filter((e) => !e.date.startsWith(monthKey));
+        try {
+          localStorage.setItem('bsnl_cached_entries', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
       return { deleted: 0 };
     }
   }
 
-  async function handleClearSampleData() {
+  async function handleClearSampleData(): Promise<{ deleted: number }> {
+    setEntries([]);
     try {
-      await api.clearAllEntries();
-      setEntries([]);
+      localStorage.setItem('bsnl_cached_entries', JSON.stringify([]));
+      const cachedSettings = localStorage.getItem('bsnl_cached_settings');
+      if (cachedSettings) {
+        const s = JSON.parse(cachedSettings);
+        s.sampleDataCleared = true;
+        localStorage.setItem('bsnl_cached_settings', JSON.stringify(s));
+      }
+    } catch {}
+    setSettings((prev) => ({ ...prev, sampleDataCleared: true }));
+    try {
+      const res = await api.clearAllEntries();
+      return res;
     } catch (err) {
       console.error('Failed to clear entries on backend:', err);
-      setEntries([]);
+      return { deleted: 0 };
     }
   }
 
@@ -316,6 +418,7 @@ export function App() {
             setEditingEntry(undefined);
             setCurrentView('new-entry');
           }}
+          onEditEntry={handleStartEditEntry}
           onReport={(year, month) => {
             if (year !== undefined && month !== undefined) {
               setReportYearMonth({ year, month });
@@ -338,6 +441,10 @@ export function App() {
           onUpdateLogo={handleUpdateLogo}
           onUpdateVehicleImg={handleUpdateVehicleImg}
           onLogout={handleLogout}
+          onNewEntry={() => {
+            setEditingEntry(undefined);
+            setCurrentView('new-entry');
+          }}
           onEditEntry={handleStartEditEntry}
           onDeleteEntry={handleDeleteEntry}
           adminPassword={settings.adminPassword || 'Bsnlatt'}

@@ -22,8 +22,10 @@ export function EntryForm({
   isAdmin = false,
   existingEntries = [],
 }: EntryFormProps) {
-  const today = new Date().toISOString().split('T')[0];
-  const [date, setDate] = useState(editEntry?.date || today);
+  const defaultDate =
+    editEntry?.date ||
+    (existingEntries.length > 0 ? existingEntries[existingEntries.length - 1].date : '2026-09-01');
+  const [date, setDate] = useState(defaultDate);
   const [startTime, setStartTime] = useState(editEntry?.startTime || '09:00');
   const [startStation, setStartStation] = useState(editEntry?.startStation || 'Attingal');
   const [actualOMRStr, setActualOMRStr] = useState(editEntry?.actualOMR?.toString() || '');
@@ -33,6 +35,7 @@ export function EntryForm({
   const [actualCMRStr, setActualCMRStr] = useState(editEntry?.actualCMR?.toString() || '');
   const [remarks, setRemarks] = useState(editEntry?.remarks || '');
   const [success, setSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const numOMR = parseFloat(actualOMRStr);
@@ -58,17 +61,11 @@ export function EntryForm({
     return priors.length > 0 ? priors[priors.length - 1] : null;
   }, [existingEntries, editEntry, date, startTime]);
 
-  function handleSave() {
+  async function handleSave() {
     setError('');
 
     if (!date || !startTime || !actualOMRStr || !placesVisited || !purpose || !actualCMRStr) {
       setError('Please fill in all required fields.');
-      return;
-    }
-
-    // Start from September 2026 onwards
-    if (date < '2026-09-01') {
-      setError('Entries must start from September 2026 reading onwards. Earlier dates are not allowed.');
       return;
     }
 
@@ -87,13 +84,6 @@ export function EntryForm({
     // Open meter reading must be less than closed meter reading
     if (numCMR <= numOMR) {
       setError(`Closing meter reading (${numCMR} KM) must be strictly greater than opening meter reading (${numOMR} KM).`);
-      return;
-    }
-
-    // Trip distance threshold check (e.g. single trip threshold of 500 KM)
-    const tripDist = numCMR - numOMR;
-    if (tripDist > 500) {
-      setError(`Trip distance (${tripDist} KM) exceeds the maximum single-trip threshold of 500 KM. Please verify your readings.`);
       return;
     }
 
@@ -122,11 +112,19 @@ export function EntryForm({
       user: editEntry ? editEntry.user : currentUser.username,
     };
 
-    onSave(entryToSave);
-    setSuccess(true);
-    setTimeout(() => {
-      onCancel();
-    }, 1500);
+    setSaving(true);
+    try {
+      await onSave(entryToSave);
+      setSuccess(true);
+      setTimeout(() => {
+        onCancel();
+      }, 600);
+    } catch (err: any) {
+      console.error('Error saving entry:', err);
+      setError(err?.message || 'Error occurred while saving entry to database.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const labelClass = 'block text-[#5A6A82] text-xs font-medium mb-1 uppercase tracking-wider';
@@ -380,14 +378,18 @@ export function EntryForm({
         <div className="flex gap-3 pb-8">
           <button
             type="button"
+            disabled={saving}
             onClick={handleSave}
-            className="flex-1 bg-[#003087] hover:bg-[#00236A] text-white font-semibold py-3 rounded text-sm transition-colors cursor-pointer"
+            className={`flex-1 bg-[#003087] hover:bg-[#00236A] text-white font-semibold py-3 rounded text-sm transition-colors cursor-pointer ${
+              saving ? 'opacity-70 cursor-not-allowed' : ''
+            }`}
             style={{ fontFamily: "'Work Sans', sans-serif" }}
           >
-            Save Log Entry
+            {saving ? 'Saving to Database...' : editEntry ? 'Update Log Entry' : 'Save Log Entry'}
           </button>
           <button
             type="button"
+            disabled={saving}
             onClick={onCancel}
             className="px-6 border border-[#C8D5EB] text-[#5A6A82] hover:border-[#003087] hover:text-[#003087] font-medium py-3 rounded text-sm transition-colors cursor-pointer"
             style={{ fontFamily: "'Work Sans', sans-serif" }}

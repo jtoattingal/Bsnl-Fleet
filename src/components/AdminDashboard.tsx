@@ -33,6 +33,7 @@ interface AdminDashboardProps {
   onSyncUsers?: (users?: User[]) => Promise<boolean>;
   onDeleteMonthEntries?: (monthKey: string) => Promise<{ deleted: number }>;
   onOpenReport?: (year?: number, month?: number) => void;
+  onNewEntry?: () => void;
 }
 
 export function AdminDashboard({
@@ -45,6 +46,7 @@ export function AdminDashboard({
   onUpdateLogo,
   onUpdateVehicleImg,
   onLogout,
+  onNewEntry,
   onEditEntry,
   onDeleteEntry,
   adminPassword = 'Bsnlatt',
@@ -374,7 +376,7 @@ export function AdminDashboard({
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-xs text-[#5A6A82]" style={{ fontFamily: "'Inter', sans-serif" }}>
-                BSNL Attingal Network
+                Attingal Network Division, Trivandrum Business Area
               </span>
               <span
                 className="bg-[#003087] text-white text-xs font-bold px-2 py-0.5 rounded"
@@ -640,6 +642,18 @@ export function AdminDashboard({
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
+                    {onNewEntry && (
+                      <button
+                        type="button"
+                        onClick={onNewEntry}
+                        className="bg-[#003087] hover:bg-[#00236A] text-white font-semibold text-xs px-3.5 py-1.5 rounded transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
+                        style={{ fontFamily: "'Work Sans', sans-serif" }}
+                      >
+                        <span>➕</span>
+                        <span>New Log Entry</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={handleSaveLogbookToDatabase}
@@ -1254,7 +1268,7 @@ export function AdminDashboard({
                     </div>
                     <div>
                       <span className="text-[#5A6A82]">Station / Network: </span>
-                      <strong className="text-[#1A2A4A]">BSNL Attingal Network</strong>
+                      <strong className="text-[#1A2A4A]">Attingal Network Division, Trivandrum Business Area</strong>
                     </div>
                     <div>
                       <span className="text-[#5A6A82]">Assigned Vehicle: </span>

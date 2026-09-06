@@ -7,9 +7,18 @@ interface EntriesTableProps {
   onEdit?: (entry: LogEntry) => void;
   isAdmin?: boolean;
   onDelete?: (id: string) => void;
+  closedMonths?: string[];
+  isMonthClosed?: boolean;
 }
 
-export function EntriesTable({ entries, onEdit, isAdmin, onDelete }: EntriesTableProps) {
+export function EntriesTable({
+  entries,
+  onEdit,
+  isAdmin = false,
+  onDelete,
+  closedMonths = [],
+  isMonthClosed = false,
+}: EntriesTableProps) {
   const sortedEntries = useMemo(() => sortEntriesChronologically(entries), [entries]);
 
   if (sortedEntries.length === 0) {
@@ -59,7 +68,7 @@ export function EntriesTable({ entries, onEdit, isAdmin, onDelete }: EntriesTabl
             <th className={thClass} style={{ fontFamily: "'Work Sans', sans-serif" }}>
               Remarks
             </th>
-            {isAdmin && (
+            {(isAdmin || Boolean(onEdit)) && (
               <th className={thClass} style={{ fontFamily: "'Work Sans', sans-serif" }}>
                 Actions
               </th>
@@ -67,86 +76,99 @@ export function EntriesTable({ entries, onEdit, isAdmin, onDelete }: EntriesTabl
           </tr>
         </thead>
         <tbody>
-          {sortedEntries.map((entry, idx) => (
-            <tr key={entry.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#FAFBFE]'}>
-              <td className={tdClass} style={{ fontFamily: "'Inter', sans-serif" }}>
-                <div className="whitespace-nowrap font-medium">{formatDate(entry.date)}</div>
-                <div className="text-[#8A99AE] text-xs">{entry.startTime}</div>
-              </td>
-              <td className={tdClass} style={{ fontFamily: "'Inter', sans-serif" }}>
-                <div>{entry.startStation}</div>
-                <div className="text-[#8A99AE] text-xs">→ {entry.endStation}</div>
-              </td>
-              <td className={tdClass}>
-                <div
-                  className="font-mono text-xs text-[#003087]"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  {entry.logbookOMR}
-                </div>
-                <div
-                  className="text-[#8A99AE] text-xs font-mono"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  act: {entry.actualOMR}
-                </div>
-              </td>
-              <td className={`${tdClass} max-w-[160px]`} style={{ fontFamily: "'Inter', sans-serif" }}>
-                <div className="text-xs leading-relaxed">{entry.placesVisited}</div>
-              </td>
-              <td className={`${tdClass} max-w-[180px]`} style={{ fontFamily: "'Inter', sans-serif" }}>
-                <div className="text-xs leading-relaxed">{entry.purpose}</div>
-              </td>
-              <td className={tdClass} style={{ fontFamily: "'Inter', sans-serif" }}>
-                {entry.endStation}
-              </td>
-              <td className={tdClass}>
-                <div
-                  className="font-mono text-xs text-[#003087]"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  {entry.logbookCMR}
-                </div>
-                <div
-                  className="text-[#8A99AE] text-xs font-mono"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  act: {entry.actualCMR}
-                </div>
-              </td>
-              <td className={tdClass}>
-                <span
-                  className="text-[#003087] font-bold font-mono"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  {entry.km}
-                </span>
-              </td>
-              <td className={`${tdClass} text-xs text-[#8A99AE]`} style={{ fontFamily: "'Inter', sans-serif" }}>
-                {entry.remarks || '—'}
-              </td>
-              {isAdmin && (
+          {sortedEntries.map((entry, idx) => {
+            const entryMonth = entry.date ? entry.date.slice(0, 7) : '';
+            const isEntryClosed = (closedMonths && closedMonths.includes(entryMonth)) || Boolean(isMonthClosed);
+            const canEdit = Boolean(onEdit) && (isAdmin || !isEntryClosed);
+
+            return (
+              <tr key={entry.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#FAFBFE]'}>
+                <td className={tdClass} style={{ fontFamily: "'Inter', sans-serif" }}>
+                  <div className="whitespace-nowrap font-medium">{formatDate(entry.date)}</div>
+                  <div className="text-[#8A99AE] text-xs">{entry.startTime}</div>
+                </td>
+                <td className={tdClass} style={{ fontFamily: "'Inter', sans-serif" }}>
+                  <div>{entry.startStation}</div>
+                  <div className="text-[#8A99AE] text-xs">→ {entry.endStation}</div>
+                </td>
                 <td className={tdClass}>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onEdit?.(entry)}
-                      className="text-[#0055C8] text-xs hover:underline font-medium cursor-pointer"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete?.(entry.id)}
-                      className="text-red-500 text-xs hover:underline font-medium cursor-pointer"
-                    >
-                      Del
-                    </button>
+                  <div
+                    className="font-mono text-xs text-[#003087]"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    {entry.logbookOMR}
+                  </div>
+                  <div
+                    className="text-[#8A99AE] text-xs font-mono"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    act: {entry.actualOMR}
                   </div>
                 </td>
-              )}
-            </tr>
-          ))}
+                <td className={`${tdClass} max-w-[160px]`} style={{ fontFamily: "'Inter', sans-serif" }}>
+                  <div className="text-xs leading-relaxed">{entry.placesVisited}</div>
+                </td>
+                <td className={`${tdClass} max-w-[180px]`} style={{ fontFamily: "'Inter', sans-serif" }}>
+                  <div className="text-xs leading-relaxed">{entry.purpose}</div>
+                </td>
+                <td className={tdClass} style={{ fontFamily: "'Inter', sans-serif" }}>
+                  {entry.endStation}
+                </td>
+                <td className={tdClass}>
+                  <div
+                    className="font-mono text-xs text-[#003087]"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    {entry.logbookCMR}
+                  </div>
+                  <div
+                    className="text-[#8A99AE] text-xs font-mono"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    act: {entry.actualCMR}
+                  </div>
+                </td>
+                <td className={tdClass}>
+                  <span
+                    className="text-[#003087] font-bold font-mono"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    {entry.km}
+                  </span>
+                </td>
+                <td className={`${tdClass} text-xs text-[#8A99AE]`} style={{ fontFamily: "'Inter', sans-serif" }}>
+                  {entry.remarks || '—'}
+                </td>
+                {(isAdmin || Boolean(onEdit)) && (
+                  <td className={tdClass}>
+                    <div className="flex items-center gap-2">
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => onEdit?.(entry)}
+                          className="text-[#0055C8] text-xs hover:underline font-medium cursor-pointer"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {isAdmin && onDelete && (
+                        <button
+                          type="button"
+                          onClick={() => onDelete(entry.id)}
+                          className="text-red-500 text-xs hover:underline font-medium cursor-pointer"
+                        >
+                          Del
+                        </button>
+                      )}
+                      {!canEdit && !isAdmin && (
+                        <span className="text-xs text-[#8A99AE]">🔒 Closed</span>
+                      )}
+                    </div>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
