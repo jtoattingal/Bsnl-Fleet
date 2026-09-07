@@ -1,5 +1,5 @@
 import cors from 'cors';
-import app from '../server.ts';
+import app from '../dist/server.cjs';
 
 let initialized = false;
 
