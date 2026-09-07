@@ -6,7 +6,7 @@ import {
   DEFAULT_USERS,
   DEFAULT_VEHICLE_IMG,
   DEFAULT_VEHICLE_REGISTRATION,
-  calcOpeningOMR,
+  calcOpeningOMR,getSettings()
   calcClosingCMR,
 } from '../src/constants';
 
@@ -155,7 +155,7 @@ export const DB = {
     const defaults = {
       vehicleRegistration: DEFAULT_VEHICLE_REGISTRATION,
       monthlyAllowance: DEFAULT_MONTHLY_ALLOWANCE,
-      logoUrl: '',
+      logoUrl: '/bsnllogo.png.png',
       vehicleImg: DEFAULT_VEHICLE_IMG,
       adminPassword: 'Bsnlatt',
       closedMonths: [],
