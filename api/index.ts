@@ -1,10 +1,12 @@
-import cors from 'cors';
-import app from '../dist/server.cjs';
+import serverless from 'serverless-http';
+const serverModule = require('../dist/server.cjs');
 
-let initialized = false;
+// Handle both default export and direct export
+const expressApp = serverModule.default || serverModule;
 
-export default async function handler(req: any, res: any) {
-  // CORS കോൺഫിഗറേഷൻ
+const handler = serverless(expressApp);
+
+export default async function (req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -18,5 +20,5 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  return app(req, res);
+  return handler(req, res);
 }
