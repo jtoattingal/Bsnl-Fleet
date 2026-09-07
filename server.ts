@@ -132,7 +132,7 @@ app.put('/api/settings', async (req, res) => {
   }
 });
 
-// Frontend Serving (Static files)
+// Frontend Static Files Serve
 const clientDistPath = path.resolve(process.cwd(), 'dist');
 if (fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
