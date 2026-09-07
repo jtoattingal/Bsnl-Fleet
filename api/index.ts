@@ -1,21 +1,22 @@
 import cors from 'cors';
-app.use(cors({
-  origin: 'https://bsnlfleetlog.vercel.app',
-  credentials: true
-}));
-import app from '../server';
-import { initDatabase } from '../server/db';
+import app from '../server.ts';
 
 let initialized = false;
 
 export default async function handler(req: any, res: any) {
-  if (!initialized) {
-    try {
-      await initDatabase();
-      initialized = true;
-    } catch (err) {
-      console.error('Vercel serverless DB init error:', err);
-    }
+  // CORS കോൺഫിഗറേഷൻ
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
   }
+
   return app(req, res);
 }
