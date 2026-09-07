@@ -1,9 +1,10 @@
+import { createRequire } from 'module';
 import serverless from 'serverless-http';
+
+const require = createRequire(import.meta.url);
 const serverModule = require('../dist/server.cjs');
 
-// Handle both default export and direct export
 const expressApp = serverModule.default || serverModule;
-
 const handler = serverless(expressApp);
 
 export default async function (req: any, res: any) {
