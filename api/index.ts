@@ -1,3 +1,8 @@
+import cors from 'cors';
+app.use(cors({
+  origin: 'https://bsnlfleetlog.vercel.app',
+  credentials: true
+}));
 import app from '../server';
 import { initDatabase } from '../server/db';
 
