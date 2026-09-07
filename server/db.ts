@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { IUser, IEntry } from './models';
+import mongoose from 'mongoose';
+import { EntryModel, SettingModel, UserModel, IUser, IEntry } from './models';
 import {
   DEFAULT_ENTRIES,
   DEFAULT_MONTHLY_ALLOWANCE,
@@ -12,99 +13,47 @@ import {
   calcClosingCMR,
 } from '../src/constants';
 
-let DATA_DIR = path.join(process.cwd(), 'data');
-let BACKUP_FILE = path.join(DATA_DIR, 'db.json');
+let isMongoConnected = false;
 
-try {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-} catch (e) {
-  DATA_DIR = os.tmpdir();
-  BACKUP_FILE = path.join(DATA_DIR, 'bsnl_db.json');
-}
-
-interface LocalDBData {
-  users: any[];
-  entries: any[];
-  settings: Record<string, any>;
-}
-
-function loadLocalDB(): LocalDBData {
-  try {
-    if (fs.existsSync(BACKUP_FILE)) {
-      const raw = fs.readFileSync(BACKUP_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        if (!Array.isArray(parsed.entries)) {
-          parsed.entries = parsed.settings?.sampleDataCleared ? [] : DEFAULT_ENTRIES;
-        }
-        return parsed;
-      }
-    }
-  } catch (err) {
-    console.error('Failed to read local DB file:', err);
-  }
-
-  const initialData: LocalDBData = {
-    users: DEFAULT_USERS,
-    entries: DEFAULT_ENTRIES,
-    settings: {
-      vehicleRegistration: DEFAULT_VEHICLE_REGISTRATION,
-      monthlyAllowance: DEFAULT_MONTHLY_ALLOWANCE,
-      logoUrl: '',
-      vehicleImg: DEFAULT_VEHICLE_IMG,
-      adminPassword: 'Bsnlatt',
-      closedMonths: [],
-      sampleDataCleared: false,
-    },
-  };
-
-  try {
-    fs.writeFileSync(BACKUP_FILE, JSON.stringify(initialData, null, 2));
-  } catch (e) {
-    console.error('Could not write initial DB file:', e);
-  }
-
-  return initialData;
-}
-
-function saveLocalDB(data: LocalDBData) {
-  try {
-    fs.writeFileSync(BACKUP_FILE, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error('Failed to write local DB file:', err);
-  }
-}
-
+// Connect to MongoDB Cloud if URI is present
 export async function initDatabase() {
-  loadLocalDB();
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    console.log('No MONGODB_URI found. Running in fallback mode.');
+    return;
+  }
+
+  try {
+    if (mongoose.connection.readyState === 1) {
+      isMongoConnected = true;
+      return;
+    }
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 5000,
+    });
+    isMongoConnected = true;
+    console.log('Successfully connected to MongoDB Cloud Database!');
+
+    // Initialize Default Users in Cloud if empty
+    const userCount = await UserModel.countDocuments();
+    if (userCount === 0) {
+      await UserModel.insertMany(DEFAULT_USERS);
+    }
+  } catch (err: any) {
+    console.warn('MongoDB connection warning:', err.message);
+    isMongoConnected = false;
+  }
 }
 
-function sortEntriesList(entries: any[]) {
-  if (!Array.isArray(entries)) return [];
-  return [...entries].sort((a, b) => {
-    const dateA = String(a?.date || '');
-    const dateB = String(b?.date || '');
-    if (dateA !== dateB) return dateA.localeCompare(dateB);
-    const timeA = String(a?.startTime || '');
-    const timeB = String(b?.startTime || '');
-    return timeA.localeCompare(timeB);
-  });
-}
-
+// Data sanitize functions
 function sanitizeEntry(e: any): IEntry {
   const startStation = String(e.startStation || 'Attingal');
   const endStation = String(e.endStation || 'Attingal');
   const actualOMR = Number(e.actualOMR) || 0;
   const actualCMR = Number(e.actualCMR) || 0;
-
-  const logbookOMR =
-    Number(e.logbookOMR) || (actualOMR ? calcOpeningOMR(actualOMR, startStation) : 0);
-  const logbookCMR =
-    Number(e.logbookCMR) || (actualCMR ? calcClosingCMR(actualCMR, endStation) : 0);
-  const km =
-    Number(e.km) || (logbookCMR && logbookOMR ? logbookCMR - logbookOMR : 0);
+  const logbookOMR = Number(e.logbookOMR) || (actualOMR ? calcOpeningOMR(actualOMR, startStation) : 0);
+  const logbookCMR = Number(e.logbookCMR) || (actualCMR ? calcClosingCMR(actualCMR, endStation) : 0);
+  const km = Number(e.km) || (logbookCMR && logbookOMR ? logbookCMR - logbookOMR : 0);
 
   return {
     id: String(e.id || Date.now().toString() + Math.floor(Math.random() * 1000)),
@@ -124,126 +73,79 @@ function sanitizeEntry(e: any): IEntry {
   };
 }
 
-function sanitizeUser(u: any): IUser {
-  return {
-    id: String(u.id || Date.now().toString() + Math.floor(Math.random() * 1000)),
-    username: String(u.username || '').trim().toLowerCase(),
-    name: String(u.name || '').trim(),
-    designation: String(u.designation || '').trim(),
-    password: String(u.password || 'Bsnl'),
-    active: u.active !== false,
-  };
-}
-
 export const DB = {
   async getUsers() {
-    const data = loadLocalDB();
-    return data.users;
+    if (isMongoConnected) {
+      const users = await UserModel.find().lean();
+      return users.map((u: any) => ({ ...u, id: u.id || u._id?.toString() }));
+    }
+    return DEFAULT_USERS;
   },
 
   async getUserById(id: string) {
-    const data = loadLocalDB();
-    return data.users.find((u) => u.id === id);
+    if (isMongoConnected) {
+      return await UserModel.findOne({ id }).lean();
+    }
+    return DEFAULT_USERS.find((u) => u.id === id);
   },
 
   async getUserByUsername(username: string) {
-    const data = loadLocalDB();
-    return data.users.find((u) => u.username.toLowerCase() === username.toLowerCase());
+    if (isMongoConnected) {
+      return await UserModel.findOne({ username: username.toLowerCase() }).lean();
+    }
+    return DEFAULT_USERS.find((u) => u.username.toLowerCase() === username.toLowerCase());
   },
 
   async createUser(user: IUser) {
-    const data = loadLocalDB();
-    data.users.push(user);
-    saveLocalDB(data);
+    if (isMongoConnected) {
+      await UserModel.create(user);
+      return user;
+    }
     return user;
   },
 
   async updateUser(id: string, updates: Partial<IUser>) {
-    const data = loadLocalDB();
-    const idx = data.users.findIndex((u) => u.id === id);
-    if (idx >= 0) {
-      data.users[idx] = { ...data.users[idx], ...updates };
-      saveLocalDB(data);
-      return data.users[idx];
+    if (isMongoConnected) {
+      return await UserModel.findOneAndUpdate({ id }, updates, { new: true }).lean();
     }
     return null;
   },
 
   async deleteUser(id: string) {
-    const data = loadLocalDB();
-    data.users = data.users.filter((u) => u.id !== id);
-    saveLocalDB(data);
+    if (isMongoConnected) {
+      await UserModel.deleteOne({ id });
+    }
     return true;
   },
 
-  async syncUsers(users: any[]) {
-    const cleanUsers = (users || []).map(sanitizeUser);
-    const data = loadLocalDB();
-    data.users = cleanUsers;
-    saveLocalDB(data);
-    return cleanUsers;
-  },
-
   async getEntries() {
-    const data = loadLocalDB();
-    return sortEntriesList(data.entries || []);
+    if (isMongoConnected) {
+      const entries = await EntryModel.find().sort({ date: 1, startTime: 1 }).lean();
+      return entries.map((e: any) => ({ ...e, id: e.id || e._id?.toString() }));
+    }
+    return [];
   },
 
   async saveEntry(entry: IEntry) {
     const clean = sanitizeEntry(entry);
-    const data = loadLocalDB();
-    if (!Array.isArray(data.entries)) data.entries = [];
-    const idx = data.entries.findIndex((e) => e.id === clean.id);
-    if (idx >= 0) {
-      data.entries[idx] = clean;
-    } else {
-      data.entries.push(clean);
+    if (isMongoConnected) {
+      await EntryModel.findOneAndUpdate({ id: clean.id }, clean, { upsert: true, new: true });
     }
-    data.entries = sortEntriesList(data.entries);
-    saveLocalDB(data);
     return clean;
   },
 
   async deleteEntry(id: string) {
-    const data = loadLocalDB();
-    data.entries = (data.entries || []).filter((e) => e.id !== id);
-    saveLocalDB(data);
+    if (isMongoConnected) {
+      await EntryModel.deleteOne({ id });
+    }
     return true;
   },
 
-  async syncEntries(entries: IEntry[]) {
-    const cleanEntries = (entries || []).map(sanitizeEntry);
-    const data = loadLocalDB();
-    data.entries = sortEntriesList(cleanEntries);
-    saveLocalDB(data);
-    return data.entries;
-  },
-
-  async deleteMonthEntries(monthKey: string) {
-    const data = loadLocalDB();
-    const countBefore = data.entries.length;
-    data.entries = data.entries.filter((e) => !e.date.startsWith(monthKey));
-    saveLocalDB(data);
-    return { deleted: countBefore - data.entries.length };
-  },
-
-  async deleteOldEntries(cutoffMonthKey: string) {
-    const cutoffDate = `${cutoffMonthKey}-31`;
-    const data = loadLocalDB();
-    const countBefore = data.entries.length;
-    data.entries = data.entries.filter((e) => e.date > cutoffDate);
-    saveLocalDB(data);
-    return { deleted: countBefore - data.entries.length };
-  },
-
   async clearAllEntries() {
-    const data = loadLocalDB();
-    const count = (data.entries || []).length;
-    data.entries = [];
-    if (!data.settings) data.settings = {};
-    data.settings.sampleDataCleared = true;
-    saveLocalDB(data);
-    return { deleted: count, sampleDataCleared: true };
+    if (isMongoConnected) {
+      await EntryModel.deleteMany({});
+    }
+    return { deleted: true };
   },
 
   async getSettings() {
@@ -255,35 +157,17 @@ export const DB = {
       adminPassword: 'Bsnlatt',
       closedMonths: [],
     };
-    const data = loadLocalDB();
-    return {
-      ...defaults,
-      ...(data.settings || {}),
-    };
+    if (isMongoConnected) {
+      const s = await SettingModel.findOne().lean();
+      return s ? { ...defaults, ...s } : defaults;
+    }
+    return defaults;
   },
 
   async updateSettings(updates: any) {
-    const current = await this.getSettings();
-    const updated = { ...current, ...updates };
-    const data = loadLocalDB();
-    data.settings = updated;
-    saveLocalDB(data);
-    return updated;
-  },
-
-  async resetToDefaults() {
-    const initialData: LocalDBData = {
-      users: [...DEFAULT_USERS],
-      entries: [...DEFAULT_ENTRIES],
-      settings: {
-        vehicleRegistration: DEFAULT_VEHICLE_REGISTRATION,
-        monthlyAllowance: DEFAULT_MONTHLY_ALLOWANCE,
-        logoUrl: '',
-        vehicleImg: DEFAULT_VEHICLE_IMG,
-        adminPassword: 'Bsnlatt',
-      },
-    };
-    saveLocalDB(initialData);
-    return initialData;
+    if (isMongoConnected) {
+      return await SettingModel.findOneAndUpdate({}, updates, { upsert: true, new: true }).lean();
+    }
+    return updates;
   },
 };
