@@ -5,6 +5,7 @@ const require = createRequire(import.meta.url);
 const serverModule = require('../dist/server.cjs');
 
 const expressApp = serverModule.default || serverModule;
+
 const handler = serverless(expressApp);
 
 export default async function (req: any, res: any) {
@@ -21,5 +22,8 @@ export default async function (req: any, res: any) {
     return;
   }
 
-  return handler(req, res);
+  // Prevent serverless function from waiting indefinitely
+  return new Promise((resolve, reject) => {
+    handler(req, res).then(resolve).catch(reject);
+  });
 }
