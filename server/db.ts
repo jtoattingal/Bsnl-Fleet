@@ -155,7 +155,7 @@ export const DB = {
     const defaults = {
       vehicleRegistration: DEFAULT_VEHICLE_REGISTRATION,
       monthlyAllowance: DEFAULT_MONTHLY_ALLOWANCE,
-      logoUrl: '/bsnllogo.png.png',
+      logoUrl: '',
       vehicleImg: DEFAULT_VEHICLE_IMG,
       adminPassword: 'Bsnlatt',
       closedMonths: [],
