@@ -23,14 +23,20 @@ interface LocalDBData {
 
 let isMongoConnected = false;
 
-// Ensure data folder exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+// Ensure data folder exists ONLY in local development, NOT on Vercel
+if (!process.env.VERCEL) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (e) {
+    console.warn('Could not create data directory:', e);
+  }
 }
 
 function loadLocalDB(): LocalDBData {
   try {
-    if (fs.existsSync(BACKUP_FILE)) {
+    if (!process.env.VERCEL && fs.existsSync(BACKUP_FILE)) {
       const raw = fs.readFileSync(BACKUP_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
@@ -58,16 +64,19 @@ function loadLocalDB(): LocalDBData {
     },
   };
 
-  try {
-    fs.writeFileSync(BACKUP_FILE, JSON.stringify(initialData, null, 2));
-  } catch (e) {
-    console.error('Could not write initial db.json:', e);
+  if (!process.env.VERCEL) {
+    try {
+      fs.writeFileSync(BACKUP_FILE, JSON.stringify(initialData, null, 2));
+    } catch (e) {
+      console.error('Could not write initial db.json:', e);
+    }
   }
 
   return initialData;
 }
 
 function saveLocalDB(data: LocalDBData) {
+  if (process.env.VERCEL) return; // Skip writing local files on Vercel
   try {
     fs.writeFileSync(BACKUP_FILE, JSON.stringify(data, null, 2));
   } catch (err) {
@@ -128,7 +137,6 @@ async function seedMongoIfEmpty() {
     }
 
     const settingsVal = (existingSettings as any)?.value || {};
-    // CRITICAL: If the user cleared sample data, do NOT resurrect sample entries!
     if (!settingsVal.sampleDataCleared) {
       const entryCount = await EntryModel.countDocuments();
       if (entryCount === 0) {
@@ -195,7 +203,7 @@ function sanitizeUser(u: any): IUser {
   };
 }
 
-// Unified Database Access Layer (Works with MongoDB when connected, durable JSON otherwise)
+// Unified Database Access Layer
 export const DB = {
   async getUsers() {
     if (isMongoConnected) {
