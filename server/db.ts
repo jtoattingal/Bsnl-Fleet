@@ -1,6 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
 import mongoose from 'mongoose';
 import { EntryModel, SettingModel, UserModel, IUser, IEntry } from './models';
 import {
@@ -18,7 +15,7 @@ let isMongoConnected = false;
 export async function initDatabase() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.log('No MONGODB_URI found. Running in fallback mode.');
+    console.log('No MONGODB_URI found.');
     return;
   }
 
@@ -138,6 +135,15 @@ export const DB = {
     return true;
   },
 
+  async deleteMonthEntries(monthKey: string) {
+    if (isMongoConnected) {
+      const regex = new RegExp(`^${monthKey}`);
+      const res = await EntryModel.deleteMany({ date: { $regex: regex } });
+      return { deleted: res.deletedCount };
+    }
+    return { deleted: 0 };
+  },
+
   async clearAllEntries() {
     if (isMongoConnected) {
       await EntryModel.deleteMany({});
@@ -163,7 +169,7 @@ export const DB = {
 
   async updateSettings(updates: any) {
     if (isMongoConnected) {
-      return await SettingModel.findOneAndUpdate({}, updates, { upsert: true, returnDocument: 'after' }).lean();
+      return await SettingModel.findOneAndUpdate({}, { $set: updates }, { upsert: true, returnDocument: 'after' }).lean();
     }
     return updates;
   },
