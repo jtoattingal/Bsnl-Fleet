@@ -1,9 +1,6 @@
 import express from 'express';
 import path from 'path';
-import dotenv from 'dotenv';
 import { DB, initDatabase } from './server/db';
-
-dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -11,14 +8,10 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Ensure database connection is active for all API requests
-app.use(async (req, res, next) => {
+// Non-blocking database init (prevents 300s timeout on Vercel)
+app.use((req, res, next) => {
   if (req.path.startsWith('/api')) {
-    try {
-      await initDatabase();
-    } catch (e) {
-      console.warn('DB check in middleware:', e);
-    }
+    initDatabase().catch((e) => console.warn('DB connect warning:', e.message));
   }
   next();
 });
