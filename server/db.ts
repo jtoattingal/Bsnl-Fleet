@@ -15,7 +15,6 @@ import {
 
 let isMongoConnected = false;
 
-// Connect to MongoDB Cloud if URI is present
 export async function initDatabase() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
@@ -34,7 +33,6 @@ export async function initDatabase() {
     isMongoConnected = true;
     console.log('Successfully connected to MongoDB Cloud Database!');
 
-    // Initialize Default Users in Cloud if empty
     const userCount = await UserModel.countDocuments();
     if (userCount === 0) {
       await UserModel.insertMany(DEFAULT_USERS);
@@ -45,7 +43,6 @@ export async function initDatabase() {
   }
 }
 
-// Data sanitize functions
 function sanitizeEntry(e: any): IEntry {
   const startStation = String(e.startStation || 'Attingal');
   const endStation = String(e.endStation || 'Attingal');
@@ -106,7 +103,7 @@ export const DB = {
 
   async updateUser(id: string, updates: Partial<IUser>) {
     if (isMongoConnected) {
-      return await UserModel.findOneAndUpdate({ id }, updates, { new: true }).lean();
+      return await UserModel.findOneAndUpdate({ id }, updates, { returnDocument: 'after' }).lean();
     }
     return null;
   },
@@ -129,7 +126,7 @@ export const DB = {
   async saveEntry(entry: IEntry) {
     const clean = sanitizeEntry(entry);
     if (isMongoConnected) {
-      await EntryModel.findOneAndUpdate({ id: clean.id }, clean, { upsert: true, new: true });
+      await EntryModel.findOneAndUpdate({ id: clean.id }, clean, { upsert: true, returnDocument: 'after' });
     }
     return clean;
   },
@@ -166,7 +163,7 @@ export const DB = {
 
   async updateSettings(updates: any) {
     if (isMongoConnected) {
-      return await SettingModel.findOneAndUpdate({}, updates, { upsert: true, new: true }).lean();
+      return await SettingModel.findOneAndUpdate({}, updates, { upsert: true, returnDocument: 'after' }).lean();
     }
     return updates;
   },
