@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { IUser, IEntry } from './models';
 import {
   DEFAULT_ENTRIES,
@@ -11,22 +12,22 @@ import {
   calcClosingCMR,
 } from '../src/constants';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const BACKUP_FILE = path.join(DATA_DIR, 'db.json');
+let DATA_DIR = path.join(process.cwd(), 'data');
+let BACKUP_FILE = path.join(DATA_DIR, 'db.json');
 
-interface LocalDBData {
-  users: any[];
-  entries: any[];
-  settings: Record<string, any>;
-}
-
-// Local storage folder creation
 try {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
 } catch (e) {
-  console.warn('Data folder check:', e);
+  DATA_DIR = os.tmpdir();
+  BACKUP_FILE = path.join(DATA_DIR, 'bsnl_db.json');
+}
+
+interface LocalDBData {
+  users: any[];
+  entries: any[];
+  settings: Record<string, any>;
 }
 
 function loadLocalDB(): LocalDBData {
@@ -62,7 +63,7 @@ function loadLocalDB(): LocalDBData {
   try {
     fs.writeFileSync(BACKUP_FILE, JSON.stringify(initialData, null, 2));
   } catch (e) {
-    console.error('Could not write initial db.json:', e);
+    console.error('Could not write initial DB file:', e);
   }
 
   return initialData;
