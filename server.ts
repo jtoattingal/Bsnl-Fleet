@@ -6,15 +6,15 @@ import { DB, initDatabase } from './server/db';
 const PORT = Number(process.env.PORT) || 3000;
 const app = express();
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Base64 ഫോട്ടോകൾക്കും ലോഗോകൾക്കും ആവശ്യമായ സൈസ് ലിമിറ്റ്
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
-// Health check route
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Auth Routes
+// Auth
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password, type } = req.body;
@@ -80,10 +80,47 @@ app.put('/api/entries/:id', async (req, res) => {
   }
 });
 
+app.delete('/api/entries/clear-all', async (req, res) => {
+  try {
+    await DB.clearAllEntries();
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/entries/month/:monthKey', async (req, res) => {
+  try {
+    const result = await DB.deleteMonthEntries(req.params.monthKey);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/entries/:id', async (req, res) => {
   try {
     await DB.deleteEntry(req.params.id);
     res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Settings API (Appearance / Photo / Logo)
+app.get('/api/settings', async (req, res) => {
+  try {
+    const settings = await DB.getSettings();
+    res.json(settings);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/settings', async (req, res) => {
+  try {
+    const updated = await DB.updateSettings(req.body);
+    res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -113,26 +150,7 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-// Settings API
-app.get('/api/settings', async (req, res) => {
-  try {
-    const settings = await DB.getSettings();
-    res.json(settings);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.put('/api/settings', async (req, res) => {
-  try {
-    const updated = await DB.updateSettings(req.body);
-    res.json(updated);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Frontend Static Files Serve
+// Static Serving
 const clientDistPath = path.resolve(process.cwd(), 'dist');
 if (fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
@@ -141,10 +159,10 @@ if (fs.existsSync(clientDistPath)) {
   });
 }
 
-// Start Server
-initDatabase().catch(err => console.warn('Database init notice:', err.message)).finally(() => {
+// Server Init
+initDatabase().catch(err => console.warn('DB init warning:', err.message)).finally(() => {
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Application running successfully on port ${PORT}`);
+    console.log(`Server listening on port ${PORT}`);
   });
 });
 
