@@ -32,7 +32,7 @@ export const CLOSING_STEPS: Record<Station, RouteStep[]> = {
 
 export const DEFAULT_VEHICLE_REGISTRATION = 'KL 19 L 6865';
 export const DEFAULT_MONTHLY_ALLOWANCE = 2000;
-export const DEFAULT_VEHICLE_IMG = '/vehicle.jpg';
+export const DEFAULT_VEHICLE_IMG = '/vehicle.jpeg';
  
 export const DEFAULT_USERS: User[] = [
   {
